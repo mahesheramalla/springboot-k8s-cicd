@@ -9,7 +9,7 @@ spec:
   selector:
     matchLabels:
       app: springboot
-  strategy: 
+  strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 1
@@ -21,7 +21,9 @@ spec:
     spec:
       containers:
       - name: springboot
-        image: maesh0004/springboot-app:latest
+        image: maesh0004/springboot-app:IMAGE_TAG
         imagePullPolicy: Always
         ports:
         - containerPort: 8081
+      imagePullSecrets:
+      - name: dockerhub-secret
