@@ -88,9 +88,7 @@ pipeline {
         stage('Update Image Tag') {
             steps {
                 bat """
-                powershell -Command "(Get-Content k8s/app-deployment.yaml) `
-                -replace 'IMAGE_TAG', '%BUILD_NUMBER%' |
-                Set-Content k8s/app-deployment.yaml"
+                powershell -Command "(Get-Content k8s/app-deployment.yaml) -replace 'IMAGE_TAG', '%BUILD_NUMBER%' | Set-Content k8s/app-deployment.yaml"
                 """
             }
         }
