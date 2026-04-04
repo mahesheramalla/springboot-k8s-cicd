@@ -66,7 +66,7 @@ docker run -p 8081:8081 springboot-app:latest
 minikube start
 minikube addons enable ingress
 kubectl apply -f k8s/
-minikube service springboot-app --url
+kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8081:80
 ```
 
 ## CI/CD Pipeline
