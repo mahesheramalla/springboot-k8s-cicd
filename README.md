@@ -1,25 +1,35 @@
 ﻿# Spring Boot Kubernetes CI/CD Pipeline
 
-A complete CI/CD pipeline project demonstrating the deployment of a Spring Boot
-application to Kubernetes using Jenkins, Docker, and Kubernetes manifests.
+A completed CI/CD pipeline project showing a Spring Boot application built with Maven, containerized with Docker, deployed to Kubernetes using kubeadm, and automated through Jenkins CI/CD.
 
 ## Tech Stack
 
 - **Application**: Java 17, Spring Boot 4.0.5
 - **Build Tool**: Apache Maven
 - **Containerization**: Docker
-- **Orchestration**: Kubernetes (Minikube)
+- **Orchestration**: Kubernetes (`kubeadm`)
 - **CI/CD**: Jenkins
 - **Registry**: Docker Hub
+
+## What this project demonstrates
+
+- Completed end-to-end CI/CD automation with Jenkins
+- Docker image build and registry push
+- Kubernetes deployment with rolling updates
+- Ingress-based external access
+- Git-based SCM integration for Jenkins
+- Real-world container orchestration with kubeadm
 
 ## Prerequisites
 
 - Java 17
 - Maven 3.x
 - Docker
-- Kubernetes (Minikube)
-- Jenkins (for CI/CD)
-- kubectl
+- Kubernetes cluster created with `kubeadm`
+- `kubectl`
+- `kubelet`
+- Jenkins
+- Ingress controller installed in the cluster
 
 ## Project Structure
 
@@ -50,7 +60,11 @@ mvn clean package
 java -jar target/app-1.jar
 ```
 
-Application runs on http://localhost:8081
+The application runs on:
+
+```text
+http://localhost:8081
+```
 
 ### 2. Docker Build
 
@@ -63,21 +77,42 @@ docker run -p 8081:8081 springboot-app:latest
 ### 3. Kubernetes Deployment
 
 ```bash
-minikube start
-minikube addons enable ingress
+# Initialize a kubeadm cluster
+sudo kubeadm init
+
+# Configure kubectl for your user
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# Ensure an ingress controller is installed before deploying the app
+# Deploy application manifests
 kubectl apply -f k8s/
-kubectl port-forward -n ingress-nginx svc/ingress-nginx-controller 8081:80
 ```
+
+Then access the application through the ingress external node IP and port:
+
+```text
+http://<NODE_IP>:<NODE_PORT>/
+```
+
+> Example:
+>
+> ```text
+> http://192.168.0.107:31704/
+> ```
 
 ## CI/CD Pipeline
 
-The Jenkins pipeline automates:
+This project uses Jenkins to automate a Git-based build and deployment workflow.
 
-1. **Environment Check**: Verify tools (Docker, Java, kubectl, Maven)
-2. **Code Checkout**: Pull latest changes
-3. **Build**: Compile and package JAR
-4. **Container Build**: Create Docker image
-5. **Deploy**: Apply Kubernetes manifests
+Key pipeline actions:
+
+1. **Environment Check**: Verify Docker, Java, Maven, and kubectl
+2. **SCM Checkout**: Pull source code from GitHub
+3. **Build**: Compile and package the Spring Boot JAR
+4. **Docker Build**: Create and tag the container image
+5. **Deploy**: Apply Kubernetes manifests to the cluster
 
 ### Pipeline Stages
 
@@ -85,9 +120,17 @@ The Jenkins pipeline automates:
 - **Build Docker Image**: `docker build -t springboot-app:latest .`
 - **Deploy to K8s**: `kubectl apply -f k8s/`
 
+## Kubernetes Architecture
+
+- **Deployment**: 3 replicas with rolling update strategy
+- **Service**: `ClusterIP` service exposing port `8081`
+- **Ingress**: Routes external traffic to the service
+
+This architecture demonstrates production-style container orchestration and traffic routing for a stateless Spring Boot app.
+
 ## API Endpoints
 
-- `GET /` - Returns hello message from CI/CD pipeline
+- `GET /` - Returns a hello message from the Spring Boot application
 
 ## Configuration
 
@@ -98,6 +141,7 @@ server.port=8081
 ```
 
 ### Kubernetes
-- **Deployment**: 3 replicas, rolling updates
-- **Service**: ClusterIP on port 8081
-- **Ingress**: Routes / to service
+- **Deployment**: 3 replicas, rolling update
+- **Service**: ClusterIP on port `8081`
+- **Ingress**: Routes `/` to the service
+
