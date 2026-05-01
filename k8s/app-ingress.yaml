@@ -5,6 +5,7 @@ metadata:
   labels:
     app: springboot
 spec:
+  ingressClassName: nginx
   rules:
   - http:
       paths:
