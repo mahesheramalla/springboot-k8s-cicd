@@ -21,13 +21,6 @@ pipeline {
             }
         }
 
-        stage("Checkout Code") {
-            steps {
-                git branch: 'main',
-                url: 'https://github.com/mahesheramalla/springboot-k8s-cicd.git'
-            }
-        }
-
         stage("Build JAR") {
             steps {
                 dir('app') {
