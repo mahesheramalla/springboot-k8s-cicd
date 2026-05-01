@@ -1,5 +1,6 @@
 pipeline {
-    agent { label 'local'}
+    agent { label 'ub22-agent' }
+
     environment {
         REGISTRY = "maesh0004"
         IMAGE_NAME = "springboot-app"
@@ -9,119 +10,112 @@ pipeline {
 
     stages {
 
-        stage('Start') {
+        stage("Check Tools") {
             steps {
-                echo 'Pipeline started'
+                sh """
+                    docker --version
+                    java -version
+                    kubectl version --client
+                    mvn -v
+                """
             }
         }
 
-        stage("Check Tools"){
-            steps{
-                bat 'docker --version'
-                bat 'java -version'
-                bat 'kubectl version --client'
-                bat 'mvn -v'
+        stage("Checkout Code") {
+            steps {
+                git branch: 'main',
+                url: 'https://github.com/mahesheramalla/springboot-k8s-cicd.git'
             }
         }
 
-        stage("Checkout Code"){
-            steps{
-                git branch: 'main', url: 'https://github.com/mahesheramalla/springboot-k8s-cicd.git'
-            }
-        }
-
-        stage("Build JAR"){
-            steps{
-                dir('app') {
-                    bat 'mvn clean package -DskipTests'
-                    bat 'dir target\\*.jar'
-                }
-            }
-        }
-
-        stage('Build Docker Image') {
+        stage("Build JAR") {
             steps {
                 dir('app') {
-                    bat """
-                    docker build -t %REGISTRY%/%IMAGE_NAME%:%BUILD_NUMBER% -t %REGISTRY%/%IMAGE_NAME%:latest .
-                    docker images %REGISTRY%/%IMAGE_NAME%
+                    sh """
+                        mvn clean package -DskipTests
+                        ls -l target/*.jar
                     """
                 }
             }
         }
 
-        stage('Push Docker Image') {
+        stage("Build Docker Image") {
+            steps {
+                dir('app') {
+                    sh """
+                        docker build -t ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER} \
+                                     -t ${REGISTRY}/${IMAGE_NAME}:latest .
+
+                        docker images ${REGISTRY}/${IMAGE_NAME}
+                    """
+                }
+            }
+        }
+
+        stage("Push Docker Image") {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-creds',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    bat """
-                    echo Logging into Docker Hub
-                    docker login -u %DOCKER_USER% -p %DOCKER_PASS%
 
-                    docker push %REGISTRY%/%IMAGE_NAME%:latest
-                    docker push %REGISTRY%/%IMAGE_NAME%:%BUILD_NUMBER%
+                    sh """
+                        echo "Logging into Docker Hub"
+                        echo "\$DOCKER_PASS" | docker login -u "\$DOCKER_USER" --password-stdin
+
+                        docker push ${REGISTRY}/${IMAGE_NAME}:latest
+                        docker push ${REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER}
                     """
                 }
             }
         }
-        stage('Create K8s Secret') {
+
+        stage("Create K8s Secret") {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'dockerhub-creds',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    bat """
-                    kubectl delete secret dockerhub-secret --ignore-not-found -n %NAMESPACE%
 
-                    kubectl create secret docker-registry dockerhub-secret ^
-                    --docker-username=%DOCKER_USER% ^
-                    --docker-password=%DOCKER_PASS% ^
-                    --dry-run=client -o yaml | kubectl apply -f - -n %NAMESPACE%
+                    sh """
+                        kubectl delete secret dockerhub-secret \
+                            --ignore-not-found -n ${NAMESPACE}
+
+                        kubectl create secret docker-registry dockerhub-secret \
+                            --docker-username=\$DOCKER_USER \
+                            --docker-password="\$DOCKER_PASS" \
+                            --docker-server=https://index.docker.io/v1/ \
+                            --dry-run=client -o yaml | kubectl apply -f - -n ${NAMESPACE}
                     """
                 }
             }
         }
-        stage('Update Image Tag') {
+
+        stage("Update Image Tag") {
             steps {
-                bat """
-                powershell -Command "(Get-Content k8s/app-deployment.yaml) -replace 'IMAGE_TAG', '%BUILD_NUMBER%' | Set-Content k8s/app-deployment.yaml"
+                sh """
+                    sed -i "s/IMAGE_TAG/${BUILD_NUMBER}/g" k8s/app-deployment.yaml
                 """
             }
         }
-        
-        stage("Deploy to Kubernetes"){
-            steps{
-                bat """
-                @echo off
 
-                echo --- Check Kubernetes Client ---
-                kubectl version --client
+        stage("Deploy to Kubernetes") {
+            steps {
+                sh """
+                    kubectl apply -f k8s/ -n ${NAMESPACE}
 
-                echo --- Apply YAMLs ---
-                kubectl apply -f k8s/ -n %NAMESPACE%
-
-                echo --- Get Pods ---
-                kubectl get pods -n %NAMESPACE%
-
-                echo --- Wait for Rollout ---
-                kubectl rollout status deployment/%DEPLOYMENT_NAME% -n %NAMESPACE% --timeout=300s
-                if %errorlevel% neq 0 (
-                    echo ERROR: Deployment rollout failed
-                    kubectl describe deployment %DEPLOYMENT_NAME% -n %NAMESPACE%
-                    kubectl get pods -n %NAMESPACE%
-                    exit /b %errorlevel%
-                )
-
-                echo --- Deployment Successful ---
-                kubectl get pods -n %NAMESPACE%
-                kubectl get svc -n %NAMESPACE%
-                kubectl get ingress -n %NAMESPACE%
+                    kubectl rollout status deployment/${DEPLOYMENT_NAME} \
+                        -n ${NAMESPACE} --timeout=300s
                 """
             }
         }
-}
+    }
+
+    post {
+        always {
+            deleteDir()
+        }
+    }
 }
